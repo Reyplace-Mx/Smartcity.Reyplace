@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import clsx from 'clsx';
-import { WebGL3DSettings } from './DeckGLOverlay';
+import { WebGL3DSettings } from './DeckGLLayers';
 
 interface WebGL3DControlsProps {
   isOpen: boolean;
@@ -183,6 +183,26 @@ export const WebGL3DControls: React.FC<WebGL3DControlsProps> = ({
                   </div>
                 </div>
                 {settings.showHexagons && <Check className="w-4 h-4 text-amber-400" />}
+              </button>
+
+              {/* Digital Twins Layer Toggle */}
+              <button
+                onClick={() => onUpdateSettings({ ...settings, showDigitalTwins: !settings.showDigitalTwins })}
+                className={clsx(
+                  "w-full p-3 rounded-2xl border text-left transition-all flex items-center justify-between",
+                  settings.showDigitalTwins !== false
+                    ? "bg-indigo-950/40 border-indigo-500/60 text-white"
+                    : "bg-slate-950/50 border-slate-800 text-slate-400"
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-3 h-3 bg-white rounded-sm shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
+                  <div>
+                    <span className="text-xs font-bold block">Edificios Gemelo Digital 3D</span>
+                    <span className="text-[10px] text-slate-400">Alto/Bajo Nivel de Presencia Digital</span>
+                  </div>
+                </div>
+                {settings.showDigitalTwins !== false && <Check className="w-4 h-4 text-white" />}
               </button>
             </div>
 

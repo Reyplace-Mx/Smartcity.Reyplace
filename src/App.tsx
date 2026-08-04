@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 import { useState, useRef, useEffect } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider } from '@vis.gl/react-google-maps';
+import { Map as MapLibreMap, Marker } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import DeckGL from '@deck.gl/react';
 import { 
   Search, MapPin, Building2, Store, Stethoscope, ChevronRight, AlertTriangle, 
   MonitorSmartphone, X, Bell, Navigation, Settings2, CheckCircle2, HardDrive, 
@@ -11,7 +14,6 @@ import clsx from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
 import { MOCK_PLACES, Place, PlaceType, CitizenReport, INITIAL_CITIZEN_REPORTS } from './data';
 import { HOLOGRAPHIC_STYLE } from './MapStyle';
-import { Directions } from './Directions';
 import { AuthButton } from './components/AuthButton';
 import { DriveFiles } from './components/DriveFiles';
 import { GeminiAssistant } from './components/GeminiAssistant';
@@ -19,18 +21,9 @@ import { AutoTourBanner } from './components/AutoTourBanner';
 import { SmartCityLayersModal } from './components/SmartCityLayersModal';
 import { CitizenReportModal } from './components/CitizenReportModal';
 import { SmartAnalyticsPanel } from './components/SmartAnalyticsPanel';
-import { DeckGLOverlay, WebGL3DSettings } from './components/DeckGLOverlay';
 import { WebGL3DControls } from './components/WebGL3DControls';
-
-function MapController({ tilt }: { tilt: number }) {
-  const map = useMap();
-  useEffect(() => {
-    if (map) {
-      map.setTilt(tilt);
-    }
-  }, [map, tilt]);
-  return null;
-}
+import { WebGL3DSettings, getDeckGLLayers, INITIAL_3D_COLUMNS } from './components/DeckGLLayers';
+import { io } from 'socket.io-client';
 
 // Los Mochis coordinates
 const DEFAULT_CENTER = { lat: 25.7928, lng: -108.9902 };
@@ -54,7 +47,62 @@ function getIconForType(type: PlaceType) {
 }
 
 export default function App() {
+  const [userRole, setUserRole] = useState<'admin' | 'partner'>('admin');
+  const [partnerFilter, setPartnerFilter] = useState<'traffic' | 'environment'>('traffic');
+  const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
+  const [columnsData, setColumnsData] = useState<any[]>(INITIAL_3D_COLUMNS);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  // Filtered data based on role
+  const filteredColumnsData = userRole === 'admin' 
+    ? columnsData 
+    : columnsData.filter(c => {
+        if (partnerFilter === 'traffic') return c.id === 'c4' || c.id === 'c5' || c.id === 'c8' || c.id === 'c10'; // Simulated north zone traffic sensors
+        if (partnerFilter === 'environment') return c.id === 'c1' || c.id === 'c2' || c.id === 'c3'; // Simulated environment sensors
+        return false;
+      });
+
+  // Real WebSocket connection to backend for Digital Twin sensor anomalies
+  useEffect(() => {
+    // Only connect if we are in browser
+    if (typeof window === 'undefined') return;
+    
+    // Connect to same host/port where backend is running
+    const socket = io();
+    
+    // Subscribe to topics based on role/filter
+    if (userRole === 'admin') {
+      socket.emit('subscribe', 'all_sensors');
+    } else {
+      socket.emit('subscribe', partnerFilter);
+    }
+    
+    socket.on('sensor_anomaly', (anomalousSensor) => {
+      setColumnsData((prev) => 
+        prev.map(col => 
+          col.id === anomalousSensor.id ? { ...col, ...anomalousSensor } : col
+        )
+      );
+      
+      // Optionally also add a notification
+      setNotifications(prev => {
+        const notif = {
+          id: Date.now(),
+          type: 'alert',
+          title: 'Anomalía Detectada',
+          message: `Sensor ${anomalousSensor.id} registró alto nivel. AQI: ${anomalousSensor.aqi}, Tráfico: ${anomalousSensor.trafficDensity}`,
+          time: 'Justo ahora',
+          read: false
+        };
+        return [notif, ...prev.slice(0, 4)];
+      });
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [userRole, partnerFilter]);
+
   const [mapMode, setMapMode] = useState<'map' | 'streetview'>('map');
   const [sidebarTab, setSidebarTab] = useState<'directory' | 'routes' | 'drive' | 'asistente'>('asistente');
   const [originId, setOriginId] = useState<string | null>(null);
@@ -62,6 +110,37 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Simulated WebSocket for Real-Time Urban Twin Updates
+  useEffect(() => {
+    const wsSimulation = setInterval(() => {
+      setPlaces(currentPlaces => {
+        const newPlaces = [...currentPlaces];
+        // Find a random low-presence or high-presence business to toggle promo/status
+        const idx = Math.floor(Math.random() * newPlaces.length);
+        const place = { ...newPlaces[idx] };
+        
+        // Let's simulate a business digitizing itself or turning on IoT
+        if (!place.digitalPresence && Math.random() > 0.7) {
+          place.digitalPresence = true;
+          place.smartFeature = 'Nueva Conexión IoT Establecida';
+          place.iotStatus = 'active';
+          setNotifications(prev => [{
+            id: Date.now(),
+            type: 'promo',
+            title: '¡Gemelo Digital Actualizado!',
+            message: `El negocio ${place.name} acaba de establecer su presencia digital y conexión IoT.`,
+            time: 'Justo ahora',
+            read: false
+          }, ...prev.slice(0, 4)]);
+        }
+        
+        newPlaces[idx] = place;
+        return newPlaces;
+      });
+    }, 15000); // Every 15 seconds simulate an event
+    return () => clearInterval(wsSimulation);
+  }, []);
   
   const [customApiKey, setCustomApiKey] = useState<string>(() => {
     return localStorage.getItem('user_gmaps_api_key') || '';
@@ -96,6 +175,7 @@ export default function App() {
     showColumns: true,
     showArcs: true,
     showHexagons: true,
+    showDigitalTwins: true,
     columnHeightScale: 3,
     arcWidth: 3,
   });
@@ -281,6 +361,27 @@ export default function App() {
               )}
             </div>
 
+            {/* Role Switcher Demo */}
+            <div className="flex items-center gap-2 mr-4 border-r border-slate-800 pr-4">
+              <select
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value as any)}
+                className="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-1.5 outline-none cursor-pointer hover:border-slate-500"
+              >
+                <option value="admin">Global Admin</option>
+                <option value="partner">Socio / Operador</option>
+              </select>
+              {userRole === 'partner' && (
+                <select
+                  value={partnerFilter}
+                  onChange={(e) => setPartnerFilter(e.target.value as any)}
+                  className="bg-indigo-900/50 border border-indigo-700 text-indigo-200 text-xs rounded-lg p-1.5 outline-none cursor-pointer hover:border-indigo-500"
+                >
+                  <option value="traffic">Sensor: Tráfico Norte</option>
+                  <option value="environment">Sensor: Medio Ambiente</option>
+                </select>
+              )}
+            </div>
             <AuthButton onAuthChange={setAccessToken} />
           </div>
         </div>
@@ -633,45 +734,47 @@ export default function App() {
                   >
                     {isValidApiKey && !apiKeyError ? (
                       <APIProvider apiKey={apiKey} onLoad={() => setApiKeyError(false)} onError={() => setApiKeyError(true)}>
-                        <Map
-                          defaultCenter={DEFAULT_CENTER}
-                          defaultZoom={15}
-                          mapId="DEMO_MAP_ID"
-                          disableDefaultUI={true}
-                          styles={HOLOGRAPHIC_STYLE}
-                          className="w-full h-full"
+                        <DeckGL
+                          initialViewState={({
+                            longitude: DEFAULT_CENTER.lng,
+                            latitude: DEFAULT_CENTER.lat,
+                            zoom: 15,
+                            pitch: mapTilt,
+                            bearing: 0
+                          } as any)}
+                          controller={true}
+                          layers={getDeckGLLayers(webglEnabled && !apiKeyError, webglSettings, places, filteredColumnsData)}
+                          style={{ width: '100%', height: '100%' }}
                         >
-                          <MapController tilt={mapTilt} />
-                          <DeckGLOverlay enabled={webglEnabled && !apiKeyError} settings={webglSettings} />
-
-                          {MOCK_PLACES.map((place) => (
-                            <AdvancedMarker
-                              key={place.id}
-                              position={{ lat: place.lat, lng: place.lng }}
-                              onClick={() => {
-                                setSelectedPlaceId(place.id);
-                                setMapMode('streetview');
-                              }}
-                            >
-                              <Pin 
-                                background={!place.digitalPresence ? '#475569' : '#6366f1'}
-                                borderColor={!place.digitalPresence ? '#1e293b' : '#3730a3'}
-                                glyphColor="#ffffff"
-                              />
-                            </AdvancedMarker>
-                          ))}
-                          
-                          {originPlace && destinationPlace && sidebarTab === 'routes' && (
-                            <Directions 
-                              origin={{ lat: originPlace.lat, lng: originPlace.lng }} 
-                              destination={{ lat: destinationPlace.lat, lng: destinationPlace.lng }} 
-                            />
-                          )}
-                        </Map>
+                          <MapLibreMap
+                            mapStyle="https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+                          >
+                            {places.map((place) => (
+                              <Marker
+                                key={place.id}
+                                longitude={place.lng}
+                                latitude={place.lat}
+                                anchor="bottom"
+                                onClick={e => {
+                                  e.originalEvent.stopPropagation();
+                                  setSelectedPlaceId(place.id);
+                                  setMapMode('streetview');
+                                }}
+                              >
+                                <div className={clsx(
+                                  "p-1.5 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] border-2 cursor-pointer transition-transform hover:scale-110",
+                                  !place.digitalPresence ? "bg-slate-700 border-slate-500" : "bg-indigo-600 border-indigo-300"
+                                )}>
+                                  <MapPin className="w-4 h-4 text-white" />
+                                </div>
+                              </Marker>
+                            ))}
+                          </MapLibreMap>
+                        </DeckGL>
                       </APIProvider>
                     ) : (
                       <InteractiveHolographicMap
-                        places={MOCK_PLACES}
+                        places={places}
                         selectedPlaceId={selectedPlaceId}
                         onSelectPlace={(id) => setSelectedPlaceId(id)}
                       />
@@ -834,6 +937,32 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
+                    <div className="mt-4 p-3 bg-indigo-950/40 rounded-xl border border-indigo-500/20">
+                      <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                        <Activity className="w-3 h-3" /> Live Feed (Digital Twin)
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-pink-500/20 flex items-center justify-center shrink-0">
+                            <span className="text-[8px]">IG</span>
+                          </div>
+                          <div className="text-[10px] text-slate-300">
+                            <strong className="text-white block">Nuevo Post</strong>
+                            Oferta activa detectada hace 5 min.
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
+                            <span className="text-[8px]">GM</span>
+                          </div>
+                          <div className="text-[10px] text-slate-300">
+                            <strong className="text-white block">Review 5⭐</strong>
+                            Reseña contestada automáticamente.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -881,6 +1010,8 @@ export default function App() {
       <SmartAnalyticsPanel
         isOpen={isAnalyticsOpen}
         onClose={() => setIsAnalyticsOpen(false)}
+        userRole={userRole}
+        partnerFilter={partnerFilter}
       />
 
       <WebGL3DControls

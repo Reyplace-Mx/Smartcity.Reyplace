@@ -13,6 +13,8 @@ import clsx from 'clsx';
 interface SmartAnalyticsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  userRole?: 'admin' | 'partner';
+  partnerFilter?: 'traffic' | 'environment';
 }
 
 // Initial 24h Mock Data for AQI & Traffic
@@ -27,9 +29,20 @@ const generateInitialAnalytics = () => [
   { time: '21:00', aqi: 31, pm25: 16, traffic: 88, vehicles: 390, energyKwh: 180 },
 ];
 
-export const SmartAnalyticsPanel: React.FC<SmartAnalyticsPanelProps> = ({ isOpen, onClose }) => {
+export const SmartAnalyticsPanel: React.FC<SmartAnalyticsPanelProps> = ({ isOpen, onClose, userRole = 'admin', partnerFilter = 'traffic' }) => {
   const [data, setData] = useState(generateInitialAnalytics());
   const [activeTab, setActiveTab] = useState<'aqi' | 'traffic' | 'energy'>('aqi');
+  
+  // Set default tab based on role
+  useEffect(() => {
+    if (userRole === 'partner') {
+      if (partnerFilter === 'traffic') setActiveTab('traffic');
+      if (partnerFilter === 'environment') setActiveTab('aqi');
+    } else {
+      setActiveTab('aqi');
+    }
+  }, [userRole, partnerFilter]);
+
   const [timeRange, setTimeRange] = useState<'24h' | '7d'>('24h');
   const [isLiveSimulating, setIsLiveSimulating] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);

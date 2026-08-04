@@ -1,4 +1,6 @@
 import express from "express";
+import http from "http";
+import { Server } from "socket.io";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
@@ -7,6 +9,45 @@ import { getOrCreateUser } from "./src/db/users.ts";
 async function startServer() {
   const app = express();
   const PORT = 3000;
+
+  const server = http.createServer(app);
+  const io = new Server(server, {
+    cors: {
+      origin: "*",
+    }
+  });
+
+  io.on('connection', (socket) => {
+    socket.on('subscribe', (topic) => {
+      // Unsubscribe from previous topics to keep it simple
+      socket.rooms.forEach(room => {
+        if (room !== socket.id) socket.leave(room);
+      });
+      socket.join(topic);
+    });
+  });
+
+  // Simulated Ingest Worker logic emitting anomalies
+  setInterval(() => {
+    // Pick a random sensor anomaly
+    const anomalousSensor = {
+      id: `c${Math.floor(Math.random() * 10) + 1}`,
+      aqi: Math.floor(Math.random() * 200),
+      trafficDensity: Math.floor(Math.random() * 100),
+      color: [255, 0, 0] // Red for anomaly
+    };
+    
+    // Global admin room
+    io.to('all_sensors').emit('sensor_anomaly', anomalousSensor);
+
+    // Emitting to partner-specific rooms (in a real app, this logic checks the sensor ID against DB)
+    if (['c4', 'c5', 'c8', 'c10'].includes(anomalousSensor.id)) {
+      io.to('traffic').emit('sensor_anomaly', anomalousSensor);
+    }
+    if (['c1', 'c2', 'c3'].includes(anomalousSensor.id)) {
+      io.to('environment').emit('sensor_anomaly', anomalousSensor);
+    }
+  }, 2000); // Every 2 seconds emit an anomaly for demo
 
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -204,7 +245,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
