@@ -642,7 +642,7 @@ export default function App() {
                           className="w-full h-full"
                         >
                           <MapController tilt={mapTilt} />
-                          <DeckGLOverlay enabled={webglEnabled} settings={webglSettings} />
+                          <DeckGLOverlay enabled={webglEnabled && !apiKeyError} settings={webglSettings} />
 
                           {MOCK_PLACES.map((place) => (
                             <AdvancedMarker

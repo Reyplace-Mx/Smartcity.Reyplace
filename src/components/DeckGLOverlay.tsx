@@ -57,27 +57,41 @@ export const DeckGLOverlay: React.FC<DeckGLOverlayProps> = ({ enabled, settings 
   const map = useMap();
 
   const overlay = useMemo(() => {
+    if (!map) return null;
     return new GoogleMapsOverlay({
       layers: [],
     });
-  }, []);
+  }, [map]);
 
   useEffect(() => {
-    if (!map || typeof window === 'undefined' || !window.google || !window.google.maps) return;
+    if (!map || !overlay || typeof window === 'undefined' || !window.google || !window.google.maps) return;
     
-    try {
-      if (enabled) {
-        overlay.setMap(map);
-      } else {
-        overlay.setMap(null);
+    let isMounted = true;
+
+    const applyMap = () => {
+      if (!isMounted) return;
+      if (!map.getProjection()) {
+        setTimeout(applyMap, 50);
+        return;
       }
-    } catch (err) {
-      console.warn('DeckGLOverlay setMap gracefully handled:', err);
-    }
+      
+      try {
+        if (enabled) {
+          overlay.setMap(map);
+        } else {
+          overlay.setMap(null);
+        }
+      } catch (err) {
+        console.warn('DeckGLOverlay setMap gracefully handled:', err);
+      }
+    };
+
+    applyMap();
 
     return () => {
+      isMounted = false;
       try {
-        overlay.setMap(null);
+        if (overlay) overlay.setMap(null);
       } catch (err) {
         // Safe cleanup
       }
@@ -85,9 +99,9 @@ export const DeckGLOverlay: React.FC<DeckGLOverlayProps> = ({ enabled, settings 
   }, [map, enabled, overlay]);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !overlay || !map) {
       try {
-        overlay.setProps({ layers: [] });
+        if (overlay) overlay.setProps({ layers: [] });
       } catch (err) {}
       return;
     }
@@ -157,12 +171,28 @@ export const DeckGLOverlay: React.FC<DeckGLOverlayProps> = ({ enabled, settings 
       );
     }
 
-    try {
-      overlay.setProps({ layers });
-    } catch (err) {
-      console.warn('DeckGLOverlay setProps gracefully handled:', err);
-    }
-  }, [enabled, settings, overlay]);
+    let isMounted = true;
+    
+    const applyProps = () => {
+      if (!isMounted) return;
+      if (!map.getProjection()) {
+        setTimeout(applyProps, 50);
+        return;
+      }
+      
+      try {
+        if (overlay) overlay.setProps({ layers });
+      } catch (err) {
+        console.warn('DeckGLOverlay setProps gracefully handled:', err);
+      }
+    };
+    
+    applyProps();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [enabled, settings, overlay, map]);
 
   return null;
 };
