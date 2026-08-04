@@ -27,26 +27,28 @@ export function Directions({ origin, destination }: DirectionsProps) {
   }, [routesLibrary, map]);
 
   useEffect(() => {
-    if (!directionsService || !directionsRenderer || !origin || !destination) return;
+    if (!directionsService || !directionsRenderer || !origin || !destination || !routesLibrary) return;
 
     directionsService
       .route({
         origin,
         destination,
-        travelMode: google.maps.TravelMode.DRIVING,
+        travelMode: routesLibrary.TravelMode.DRIVING,
         provideRouteAlternatives: true,
       })
       .then(response => {
         directionsRenderer.setDirections(response);
       })
       .catch(error => {
-        console.error('Directions request failed', error);
+        console.warn('Directions request failed:', error);
       });
 
     return () => {
-      directionsRenderer.setDirections({ routes: [] });
+      try {
+        directionsRenderer.setMap(null);
+      } catch (e) {}
     }
-  }, [directionsService, directionsRenderer, origin, destination]);
+  }, [directionsService, directionsRenderer, origin, destination, routesLibrary]);
 
   return null;
 }

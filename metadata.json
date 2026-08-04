@@ -1,6 +1,6 @@
 {
   "name": "Los Mochis Ciudad Digital",
-  "description": "Una simulación de ciudad digital y directorio interactivo para promover la digitalización de comercios en Los Mochis, Sinaloa mediante integración con Google Maps y Street View.",
+  "description": "Plataforma Smart City para Los Mochis con superposición WebGL 3D (Deck.gl), columnas de contaminación AQI extrudidas, arcos de flujo vial, recorrido automático 360° en Street View, telemetría Recharts y reportes ciudadanos.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
