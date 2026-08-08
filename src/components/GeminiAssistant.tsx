@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, MapPin, Search, Cpu, Video, Image as ImageIcon, Loader2, X, Settings2, Database, ShieldCheck, Zap, Bot } from 'lucide-react';
+import { Send, Sparkles, MapPin, Search, Cpu, Video, Image as ImageIcon, Loader2, X, Settings2, Database, ShieldCheck, Zap, Bot, Volume2, VolumeX } from 'lucide-react';
 import clsx from 'clsx';
 import Markdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
@@ -158,8 +158,50 @@ export function GeminiAssistant({ selectedPlace }: GeminiAssistantProps = {}) {
   const [videoStatus, setVideoStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [currentlySpeakingId, setCurrentlySpeakingId] = useState<string | null>(null);
+
+  // Speech Synthesis Helper for Emmanai.smart
+  const speakText = (text: string, msgId?: string) => {
+    if (!('speechSynthesis' in window)) return;
+
+    if (currentlySpeakingId === msgId) {
+      window.speechSynthesis.cancel();
+      setCurrentlySpeakingId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    // Clean markdown characters for smooth speech
+    const cleanText = text
+      .replace(/###/g, '')
+      .replace(/\*\*/g, '')
+      .replace(/\*/g, '')
+      .replace(/#/g, '')
+      .replace(/>/g, '')
+      .replace(/`/g, '')
+      .replace(/---/g, '')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = 'es-MX';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Pick Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const esVoice = voices.find(v => v.lang.includes('es'));
+    if (esVoice) utterance.voice = esVoice;
+
+    if (msgId) setCurrentlySpeakingId(msgId);
+
+    utterance.onend = () => setCurrentlySpeakingId(null);
+    utterance.onerror = () => setCurrentlySpeakingId(null);
+
+    window.speechSynthesis.speak(utterance);
+  };
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -195,13 +237,18 @@ export function GeminiAssistant({ selectedPlace }: GeminiAssistantProps = {}) {
     // Process instantly via Emmanai.smart Local Memory Engine (0 Tokens)
     setTimeout(() => {
       const memoryResponse = queryEmmanaiMemory(userQuery, selectedPlace);
+      const resId = (Date.now() + 1).toString();
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        id: resId,
         role: 'assistant',
         content: memoryResponse,
         isLocalMemory: true
       }]);
       setLoading(false);
+
+      if (speechEnabled) {
+        speakText(memoryResponse, resId);
+      }
     }, 120);
   };
 
@@ -356,9 +403,26 @@ export function GeminiAssistant({ selectedPlace }: GeminiAssistantProps = {}) {
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (speechEnabled) window.speechSynthesis?.cancel();
+              setSpeechEnabled(!speechEnabled);
+            }}
+            className={clsx(
+              "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-colors flex items-center gap-1 border",
+              speechEnabled
+                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 hover:bg-indigo-500/30"
+                : "bg-slate-800 text-slate-500 border-slate-700"
+            )}
+            title={speechEnabled ? "Voz de Asistente Activada (Hacer clic para Silenciar)" : "Voz de Asistente Silenciada"}
+          >
+            {speechEnabled ? <Volume2 className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+            {speechEnabled ? "VOZ ON" : "MUTED"}
+          </button>
+
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">En Vivo</span>
+          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest hidden sm:inline">En Vivo</span>
         </div>
       </div>
 
@@ -408,9 +472,25 @@ export function GeminiAssistant({ selectedPlace }: GeminiAssistantProps = {}) {
                   : "bg-slate-800/90 text-slate-200 border border-slate-700/80 shadow-md"
               )}>
                 {m.role === 'assistant' && (
-                  <div className="flex items-center gap-1.5 mb-2 text-[10px] font-bold text-emerald-400 border-b border-slate-700/60 pb-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Emmanai.smart — Memoria Local (0 Tokens)</span>
+                  <div className="flex items-center justify-between gap-1.5 mb-2 text-[10px] font-bold text-emerald-400 border-b border-slate-700/60 pb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Emmanai.smart — Memoria Local (0 Tokens)</span>
+                    </div>
+
+                    <button
+                      onClick={() => speakText(m.content, m.id)}
+                      className={clsx(
+                        "px-2 py-0.5 rounded text-[9px] font-bold transition-all flex items-center gap-1 border",
+                        currentlySpeakingId === m.id
+                          ? "bg-indigo-600 text-white border-indigo-400 animate-pulse"
+                          : "bg-slate-900/80 hover:bg-slate-800 text-indigo-300 border-indigo-500/30"
+                      )}
+                      title="Escuchar narración de voz de esta respuesta/alerta"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                      {currentlySpeakingId === m.id ? "Detener" : "Escuchar"}
+                    </button>
                   </div>
                 )}
                 <div className="markdown-body text-xs sm:text-sm">

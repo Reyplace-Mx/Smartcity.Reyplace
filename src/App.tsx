@@ -8,7 +8,7 @@ import {
   Search, MapPin, Building2, Store, Stethoscope, ChevronRight, AlertTriangle, 
   MonitorSmartphone, X, Bell, Navigation, Settings2, CheckCircle2, HardDrive, 
   Sparkles, Layers, Play, Radio, Cpu, Wind, Activity, Wifi, ShieldCheck, Zap,
-  MessageSquare, Move3d, Box, Bot
+  MessageSquare, Move3d, Box, Bot, Camera, Scan, Menu
 } from 'lucide-react';
 import clsx from 'clsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -23,6 +23,9 @@ import { CitizenReportModal } from './components/CitizenReportModal';
 import { SmartAnalyticsPanel } from './components/SmartAnalyticsPanel';
 import { WebGL3DControls } from './components/WebGL3DControls';
 import { WebGL3DSettings, getDeckGLLayers, INITIAL_3D_COLUMNS } from './components/DeckGLLayers';
+import { NAPValidationCard } from './components/NAPValidationCard';
+import { ARModeOverlay } from './components/ARModeOverlay';
+import { D3TrafficFlowOverlay } from './components/D3TrafficFlowOverlay';
 import { io } from 'socket.io-client';
 
 // Los Mochis coordinates
@@ -161,9 +164,12 @@ export default function App() {
   const [tourNarrate, setTourNarrate] = useState(true);
 
   // Smart City Modals State
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLayersOpen, setIsLayersOpen] = useState(false);
   const [isReportsOpen, setIsReportsOpen] = useState(false);
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(true);
+  const [isArModeOpen, setIsArModeOpen] = useState(false);
+  const [showD3Traffic, setShowD3Traffic] = useState(true);
   const [activeLayers, setActiveLayers] = useState<string[]>(['wifi', 'aqi', 'traffic', 'lighting']);
   const [citizenReports, setCitizenReports] = useState<CitizenReport[]>(INITIAL_CITIZEN_REPORTS);
 
@@ -259,11 +265,18 @@ export default function App() {
       {/* Header Navigation */}
       <nav className="h-16 px-4 lg:px-8 flex items-center justify-between border-b border-slate-800 bg-slate-900/90 backdrop-blur-md z-30 shrink-0">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+            className="md:hidden p-2 text-slate-300 hover:text-white bg-slate-800 rounded-xl border border-slate-700"
+            title="Abrir Menú / Directorio"
+          >
+            <Menu className="w-5 h-5 text-indigo-400" />
+          </button>
           <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-xl flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20 text-sm tracking-tighter">
             LM
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            <h1 className="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
               Mochis <span className="text-indigo-400 font-semibold">Smart City</span>
               <span className="hidden sm:inline-block px-2 py-0.5 text-[9px] font-black uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-md">
                 Hub 360°
@@ -390,12 +403,26 @@ export default function App() {
       {/* Main Container */}
       <div className="flex-1 flex relative overflow-hidden">
         
+        {/* Mobile Sidebar Backdrop */}
+        <AnimatePresence>
+          {isMobileSidebarOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-30 md:hidden"
+            />
+          )}
+        </AnimatePresence>
+
         {/* Left Sidebar: Search and List */}
-        <motion.aside 
-          initial={{ x: -320 }}
-          animate={{ x: 0 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col z-10 shrink-0 shadow-2xl"
+        <aside 
+          className={clsx(
+            "w-80 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 shadow-2xl transition-transform duration-300 ease-in-out",
+            "fixed md:relative top-16 md:top-0 bottom-0 left-0 z-40 md:z-10 h-[calc(100vh-4rem)] md:h-auto",
+            isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          )}
         >
           <div className="flex border-b border-slate-800 bg-slate-950/40">
             <button 
@@ -588,7 +615,7 @@ export default function App() {
           ) : (
             <GeminiAssistant selectedPlace={selectedPlace} />
           )}
-        </motion.aside>
+        </aside>
 
         {/* Main Map Viewport */}
         <main className="flex-1 relative bg-slate-950 overflow-hidden">
@@ -618,7 +645,7 @@ export default function App() {
               </AnimatePresence>
 
               {/* Top Control Overlay */}
-              <div className="absolute top-4 left-4 z-20 flex flex-wrap gap-2">
+              <div className="absolute top-3 left-3 right-3 sm:right-auto z-20 flex items-center gap-2 overflow-x-auto scrollbar-none sm:flex-wrap pb-1">
                 <div className="flex bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-1 border border-slate-700">
                   <button
                     onClick={() => setMapMode('map')}
@@ -649,6 +676,25 @@ export default function App() {
                     <Play className="w-3.5 h-3.5 fill-current" /> Recorrido Automático 360°
                   </button>
                 )}
+
+                <button
+                  onClick={() => setIsArModeOpen(true)}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-2xl shadow-lg border border-emerald-400/40 flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Modo Realidad Aumentada con Cámara"
+                >
+                  <Camera className="w-3.5 h-3.5" /> Modo AR (Cámara)
+                </button>
+
+                <button
+                  onClick={() => setShowD3Traffic(!showD3Traffic)}
+                  className={clsx(
+                    "px-3.5 py-1.5 bg-slate-900/90 backdrop-blur-md hover:bg-slate-800 text-xs font-bold rounded-2xl border flex items-center gap-1.5 transition-all cursor-pointer",
+                    showD3Traffic ? "border-amber-500/70 text-amber-300 shadow-[0_0_10px_rgba(245,158,11,0.2)]" : "border-slate-700 text-slate-400"
+                  )}
+                  title="Activar/Desactivar Líneas Vectoriales D3.js de Tráfico"
+                >
+                  <Activity className="w-3.5 h-3.5 text-amber-400" /> Tráfico D3.js
+                </button>
 
                 <button
                   onClick={() => setIsWebglControlsOpen(!isWebglControlsOpen)}
@@ -818,7 +864,7 @@ export default function App() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 320, opacity: 0 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="w-80 bg-slate-950 p-6 flex flex-col gap-6 z-10 shrink-0 overflow-y-auto border-l border-slate-800"
+            className="w-full sm:w-80 bg-slate-950 p-4 sm:p-6 flex flex-col gap-4 sm:gap-6 z-30 shrink-0 overflow-y-auto border-t sm:border-t-0 sm:border-l border-slate-800 max-h-[60vh] sm:max-h-none fixed sm:relative bottom-0 right-0 left-0 sm:left-auto shadow-2xl"
           >
             {!selectedPlace ? (
               <>
@@ -966,6 +1012,9 @@ export default function App() {
                   </div>
                 )}
 
+                {/* NAP Validation Component for Google Places */}
+                <NAPValidationCard place={selectedPlace} />
+
                 <div className="mt-auto">
                   <h4 className="text-xs font-bold text-slate-500 uppercase mb-3">Nodos Cercanos</h4>
                   <div className="grid grid-cols-2 gap-2">
@@ -1012,6 +1061,7 @@ export default function App() {
         onClose={() => setIsAnalyticsOpen(false)}
         userRole={userRole}
         partnerFilter={partnerFilter}
+        selectedSensorId={selectedPlaceId}
       />
 
       <WebGL3DControls
@@ -1022,6 +1072,16 @@ export default function App() {
         settings={webglSettings}
         onUpdateSettings={setWebglSettings}
         onTiltCamera={setMapTilt}
+      />
+
+      {/* D3.js Animated Traffic Flow Vector Overlay */}
+      <D3TrafficFlowOverlay isVisible={showD3Traffic} />
+
+      {/* Augmented Reality (AR) Overlay Modal */}
+      <ARModeOverlay
+        isOpen={isArModeOpen}
+        onClose={() => setIsArModeOpen(false)}
+        onSelectPlace={(place) => setSelectedPlaceId(place.id)}
       />
 
       {/* API Key Configuration Modal */}

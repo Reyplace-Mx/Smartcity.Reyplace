@@ -23,6 +23,7 @@
     "@vis.gl/react-google-maps": "^1.9.0",
     "@vitejs/plugin-react": "^5.0.4",
     "clsx": "^2.1.1",
+    "d3": "^7.9.0",
     "deck.gl": "^9.3.7",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.45.2",
@@ -44,6 +45,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@types/d3": "^7.4.3",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.20.3",
