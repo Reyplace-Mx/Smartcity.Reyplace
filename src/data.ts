@@ -27,6 +27,8 @@ export interface Place {
   images?: string[];
   views?: number;
   reviews: Review[];
+  hasHighTraffic24h?: boolean;
+  hasNewReviews24h?: boolean;
 }
 
 export interface CitizenReport {
@@ -40,6 +42,9 @@ export interface CitizenReport {
   status: 'recibido' | 'en_proceso' | 'resuelto';
   statusLabel: string;
   trackingId: string;
+  lat: number;
+  lng: number;
+  isHighPriority?: boolean;
 }
 
 export const INITIAL_CITIZEN_REPORTS: CitizenReport[] = [
@@ -53,7 +58,10 @@ export const INITIAL_CITIZEN_REPORTS: CitizenReport[] = [
     date: 'Hace 2 horas',
     status: 'en_proceso',
     statusLabel: 'En Proceso',
-    trackingId: 'LM-2026-4891'
+    trackingId: 'LM-2026-4891',
+    lat: 25.7935,
+    lng: -108.9912,
+    isHighPriority: true
   },
   {
     id: 'rep-2',
@@ -63,9 +71,12 @@ export const INITIAL_CITIZEN_REPORTS: CitizenReport[] = [
     location: 'Blvd. Rosales frente a Parque Sinaloa',
     description: 'Luminarias apagadas en la acera poniente, área muy oscura por las noches.',
     date: 'Ayer, 9:30 PM',
-    status: 'resuelto',
-    statusLabel: 'Resuelto',
-    trackingId: 'LM-2026-4850'
+    status: 'en_proceso',
+    statusLabel: 'En Proceso',
+    trackingId: 'LM-2026-4850',
+    lat: 25.7890,
+    lng: -108.9950,
+    isHighPriority: true
   },
   {
     id: 'rep-3',
@@ -77,7 +88,40 @@ export const INITIAL_CITIZEN_REPORTS: CitizenReport[] = [
     date: 'Hace 4 horas',
     status: 'recibido',
     statusLabel: 'Recibido',
-    trackingId: 'LM-2026-4902'
+    trackingId: 'LM-2026-4902',
+    lat: 25.7950,
+    lng: -108.9880,
+    isHighPriority: true
+  },
+  {
+    id: 'rep-4',
+    citizenName: 'Anabel Cárdenas',
+    category: 'seguridad',
+    categoryLabel: 'Seguridad Ciudadana',
+    location: 'Blvd. Centenario & Zaragoza, Col. Degollado',
+    description: 'Semáforo descalibrado ocasionando riesgo en intersección de alto tráfico.',
+    date: 'Hace 30 minutos',
+    status: 'en_proceso',
+    statusLabel: 'En Proceso',
+    trackingId: 'LM-2026-4915',
+    lat: 25.7865,
+    lng: -108.9920,
+    isHighPriority: true
+  },
+  {
+    id: 'rep-5',
+    citizenName: 'Roberto Felix',
+    category: 'parques',
+    categoryLabel: 'Mantenimiento Urbano',
+    location: 'Plazuela 27 de Septiembre (Zona Kiosco)',
+    description: 'Limpieza y restauración de bancas en zona peatonal.',
+    date: 'Hace 1 hora',
+    status: 'recibido',
+    statusLabel: 'Recibido',
+    trackingId: 'LM-2026-4920',
+    lat: 25.7909,
+    lng: -108.9953,
+    isHighPriority: false
   }
 ];
 

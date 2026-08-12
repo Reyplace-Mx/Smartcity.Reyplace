@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, useApiIsLoaded, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { 
   Search, MapPin, Building2, Store, Stethoscope, ChevronRight, AlertTriangle, 
   MonitorSmartphone, Star, Bell, Calendar, GraduationCap, Map as MapIcon, 
@@ -115,6 +115,65 @@ function MapCameraPan({ center, zoom }: { center: { lat: number; lng: number }; 
   return null;
 }
 
+function GoogleMapsCitizenHeatmapLayer({
+  reports,
+  enabled
+}: {
+  reports: CitizenReport[];
+  enabled: boolean;
+}) {
+  const map = useMap();
+  const heatmapRef = useRef<google.maps.visualization.HeatmapLayer | null>(null);
+
+  useEffect(() => {
+    if (!map || typeof google === 'undefined' || !google.maps) return;
+
+    if (!enabled) {
+      if (heatmapRef.current) {
+        heatmapRef.current.setMap(null);
+        heatmapRef.current = null;
+      }
+      return;
+    }
+
+    if (google.maps.visualization && google.maps.visualization.HeatmapLayer) {
+      const dataPoints = reports.map(r => new google.maps.LatLng(r.lat, r.lng));
+
+      if (heatmapRef.current) {
+        heatmapRef.current.setData(dataPoints);
+        heatmapRef.current.setMap(map);
+      } else {
+        const heatmap = new google.maps.visualization.HeatmapLayer({
+          data: dataPoints,
+          map: map,
+          radius: 40,
+          opacity: 0.85,
+          gradient: [
+            'rgba(0, 255, 255, 0)',
+            'rgba(0, 255, 255, 1)',
+            'rgba(0, 191, 255, 1)',
+            'rgba(0, 127, 255, 1)',
+            'rgba(0, 0, 255, 1)',
+            'rgba(255, 0, 255, 1)',
+            'rgba(255, 0, 127, 1)',
+            'rgba(255, 0, 0, 1)'
+          ]
+        });
+        heatmapRef.current = heatmap;
+      }
+    }
+
+    return () => {
+      if (heatmapRef.current) {
+        heatmapRef.current.setMap(null);
+        heatmapRef.current = null;
+      }
+    };
+  }, [map, reports, enabled]);
+
+  return null;
+}
+
 export default function App() {
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
@@ -126,6 +185,28 @@ export default function App() {
   const [maxRadiusKm, setMaxRadiusKm] = useState<number>(15);
   const [isOpenNowFilter, setIsOpenNowFilter] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // GPS position tracking & Citizen Demand Heatmap layer state
+  const [userGpsPosition, setUserGpsPosition] = useState<{ lat: number; lng: number }>({ lat: 25.7930, lng: -108.9920 });
+  const [citizenDemandHeatmap, setCitizenDemandHeatmap] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setUserGpsPosition({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
+        },
+        (err) => {
+          console.warn("GPS watch info:", err.message);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      );
+      return () => navigator.geolocation.clearWatch(watchId);
+    }
+  }, []);
 
   // Favorites state backed by localStorage
   const [favoritesIds, setFavoritesIds] = useState<string[]>(() => {
@@ -1367,7 +1448,7 @@ export default function App() {
       {/* Main Map / 3D Canvas / Street View Area */}
       <main className="flex-1 relative bg-slate-950 overflow-hidden flex flex-col">
         {/* Top View Mode Switch Controls */}
-        <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-20 flex flex-wrap gap-1 bg-slate-900/95 backdrop-blur-md rounded-xl shadow-2xl p-1 sm:p-1.5 border border-slate-800 max-w-[calc(100vw-1.5rem)]">
+        <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-20 flex flex-wrap gap-1 sm:gap-2 bg-slate-900/95 backdrop-blur-md rounded-xl shadow-2xl p-1 sm:p-1.5 border border-slate-800 max-w-[calc(100vw-1.5rem)]">
           <button
             onClick={() => {
               setActiveTab('mapa3d');
@@ -1407,6 +1488,21 @@ export default function App() {
           >
             <MonitorSmartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             <span>Street View 360°</span>
+          </button>
+
+          {/* Citizen Demand Heatmap Toggle */}
+          <button
+            onClick={() => setCitizenDemandHeatmap(!citizenDemandHeatmap)}
+            className={clsx(
+              "px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-black rounded-lg transition-all flex items-center gap-1.5 sm:gap-2 border",
+              citizenDemandHeatmap
+                ? "bg-rose-500 text-white border-rose-400 shadow-lg shadow-rose-500/30 animate-pulse"
+                : "bg-slate-800 text-rose-400 border-rose-500/30 hover:bg-slate-700"
+            )}
+            title="Visualizar mapa de calor con la densidad de reportes ciudadanos en Los Mochis"
+          >
+            <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 text-rose-400" />
+            <span>Mapa de Calor Demandas</span>
           </button>
         </div>
 
@@ -1530,7 +1626,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <APIProvider apiKey={apiKey}>
+          <APIProvider apiKey={apiKey} libraries={['visualization']}>
             <div className={clsx(
               "absolute inset-0 transition-opacity duration-500",
               mapMode === 'map' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
@@ -1547,45 +1643,95 @@ export default function App() {
               >
                 <MapCameraPan center={mapCenter} zoom={mapZoom} />
 
-                {places.map((place) => (
-                  <AdvancedMarker
-                    key={place.id}
-                    position={{ lat: place.lat, lng: place.lng }}
-                    onClick={() => {
-                      handleSelectPlace(place);
-                      setDetailModalPlace(place);
-                    }}
-                  >
-                    <div 
-                      className="relative group cursor-pointer flex flex-col items-center"
-                      onMouseEnter={() => setHoveredMarkerId(place.id)}
-                      onMouseLeave={() => setHoveredMarkerId(null)}
+                {/* Google Maps Heatmap Layer for Citizen Demand Density */}
+                <GoogleMapsCitizenHeatmapLayer
+                  reports={citizenReports}
+                  enabled={citizenDemandHeatmap}
+                />
+
+                {places.map((place) => {
+                  const isHotspot24h =
+                    place.hasHighTraffic24h ||
+                    place.hasNewReviews24h ||
+                    (place.views && place.views > 80) ||
+                    (place.reviews && place.reviews.length >= 2);
+
+                  return (
+                    <AdvancedMarker
+                      key={place.id}
+                      position={{ lat: place.lat, lng: place.lng }}
+                      onClick={() => {
+                        handleSelectPlace(place);
+                        setDetailModalPlace(place);
+                      }}
                     >
-                      {/* Hover Tooltip Popup */}
-                      {hoveredMarkerId === place.id && (
-                        <div className="absolute bottom-full mb-2 bg-slate-950/95 text-white px-3 py-1.5 rounded-xl border border-amber-500/60 shadow-2xl backdrop-blur-md whitespace-nowrap z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150 flex flex-col items-center">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-amber-400 text-xs">{place.name}</span>
-                            {place.digitalPresence && (
-                              <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1 rounded">
-                                PRO
+                      <div 
+                        className="relative group cursor-pointer flex flex-col items-center"
+                        onMouseEnter={() => setHoveredMarkerId(place.id)}
+                        onMouseLeave={() => setHoveredMarkerId(null)}
+                      >
+                        {/* Pulse animation effect using Framer Motion for high traffic / active review businesses */}
+                        {isHotspot24h && (
+                          <>
+                            <motion.div
+                              animate={{
+                                scale: [1, 2.2, 1],
+                                opacity: [0.8, 0, 0.8],
+                              }}
+                              transition={{
+                                duration: 2,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                              }}
+                              className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-amber-400/50 border border-amber-300 pointer-events-none -z-10 shadow-[0_0_15px_#f59e0b]"
+                            />
+                            <motion.div
+                              animate={{
+                                scale: [1, 2.8, 1],
+                                opacity: [0.5, 0, 0.5],
+                              }}
+                              transition={{
+                                duration: 2,
+                                delay: 0.4,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                              }}
+                              className="absolute inset-0 m-auto w-8 h-8 rounded-full bg-rose-500/30 border border-rose-400 pointer-events-none -z-10 shadow-[0_0_20px_#f43f5e]"
+                            />
+                          </>
+                        )}
+
+                        {/* Hover Tooltip Popup */}
+                        {hoveredMarkerId === place.id && (
+                          <div className="absolute bottom-full mb-2 bg-slate-950/95 text-white px-3 py-1.5 rounded-xl border border-amber-500/60 shadow-2xl backdrop-blur-md whitespace-nowrap z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-150 flex flex-col items-center">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-extrabold text-amber-400 text-xs">{place.name}</span>
+                              {place.digitalPresence && (
+                                <span className="text-[9px] bg-amber-500 text-slate-950 font-black px-1 rounded">
+                                  PRO
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-300 font-medium">{place.category}</span>
+                            {isHotspot24h && (
+                              <span className="text-[9px] font-extrabold text-amber-300 flex items-center gap-1 mt-0.5">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Alta Afluencia / Reseñas 24h
                               </span>
                             )}
+                            <div className="w-2.5 h-2.5 bg-slate-950 border-r border-b border-amber-500/60 rotate-45 -mb-2 mt-0.5" />
                           </div>
-                          <span className="text-[10px] text-slate-300 font-medium">{place.category}</span>
-                          <div className="w-2.5 h-2.5 bg-slate-950 border-r border-b border-amber-500/60 rotate-45 -mb-2 mt-0.5" />
-                        </div>
-                      )}
+                        )}
 
-                      <Pin 
-                        background={!place.digitalPresence ? '#94a3b8' : '#eab308'}
-                        borderColor={!place.digitalPresence ? '#64748b' : '#a16207'}
-                        glyphColor="#ffffff"
-                        scale={place.digitalPresence ? 1.2 : 0.9}
-                      />
-                    </div>
-                  </AdvancedMarker>
-                ))}
+                        <Pin 
+                          background={!place.digitalPresence ? '#94a3b8' : isHotspot24h ? '#f59e0b' : '#eab308'}
+                          borderColor={!place.digitalPresence ? '#64748b' : '#a16207'}
+                          glyphColor="#ffffff"
+                          scale={place.digitalPresence ? 1.25 : 0.9}
+                        />
+                      </div>
+                    </AdvancedMarker>
+                  );
+                })}
               </Map>
             </div>
 
@@ -1692,9 +1838,14 @@ export default function App() {
 
       <ProximityNotificationToast
         places={places}
+        citizenReports={citizenReports}
+        userGpsPosition={userGpsPosition}
         onSelectPlace={(place) => {
           handleSelectPlace(place);
           setActiveTab('mapa3d');
+        }}
+        onSelectCitizenReport={(report) => {
+          setActiveTab('red');
         }}
         favoritesIds={favoritesIds}
         onToggleFavorite={toggleFavorite}
@@ -2682,28 +2833,47 @@ function BusinessDetailModal({
 function StreetViewWrapper({ lat, lng, heading, pitch }: { lat: number, lng: number, heading: number, pitch: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pano, setPano] = useState<google.maps.StreetViewPanorama | null>(null);
-  const apiIsLoaded = useApiIsLoaded();
 
   useEffect(() => {
-    if (!apiIsLoaded || !containerRef.current || !window.google || !window.google.maps) return;
+    let checkInterval: NodeJS.Timeout;
+    
+    const initPano = () => {
+      if (!containerRef.current) return false;
+      if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.StreetViewPanorama) {
+        try {
+          const panorama = new window.google.maps.StreetViewPanorama(containerRef.current, {
+            position: { lat, lng },
+            pov: { heading, pitch },
+            zoom: 1,
+            addressControl: false,
+            showRoadLabels: false,
+            linksControl: true,
+            panControl: true,
+            enableCloseButton: false,
+          });
+          
+          setPano(panorama);
+          return true;
+        } catch (err) {
+          console.warn("StreetView init warning:", err);
+          return false;
+        }
+      }
+      return false;
+    };
 
-    try {
-      const panorama = new window.google.maps.StreetViewPanorama(containerRef.current, {
-        position: { lat, lng },
-        pov: { heading, pitch },
-        zoom: 1,
-        addressControl: false,
-        showRoadLabels: false,
-        linksControl: true,
-        panControl: true,
-        enableCloseButton: false,
-      });
-      
-      setPano(panorama);
-    } catch (err) {
-      console.warn("StreetView init warning:", err);
+    if (!initPano()) {
+      checkInterval = setInterval(() => {
+        if (initPano()) {
+          clearInterval(checkInterval);
+        }
+      }, 500);
     }
-  }, [apiIsLoaded]);
+
+    return () => {
+      if (checkInterval) clearInterval(checkInterval);
+    };
+  }, []);
 
   useEffect(() => {
     if (pano) {
