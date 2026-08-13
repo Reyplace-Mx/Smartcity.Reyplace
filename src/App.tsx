@@ -143,7 +143,8 @@ function GoogleMapsCitizenHeatmapLayer({
         heatmapRef.current.setData(dataPoints);
         heatmapRef.current.setMap(map);
       } else {
-        const heatmap = new google.maps.visualization.HeatmapLayer({
+        const HeatmapLayer = google.maps.visualization.HeatmapLayer as any;
+        const heatmap = new HeatmapLayer({
           data: dataPoints,
           map: map,
           radius: 40,
@@ -352,10 +353,12 @@ export default function App() {
     }
   };
 
-  const handleAddCitizenReport = (repData: Omit<CitizenReport, 'id' | 'date' | 'status' | 'statusLabel' | 'trackingId'>) => {
+  const handleAddCitizenReport = (repData: Omit<CitizenReport, 'id' | 'date' | 'status' | 'statusLabel' | 'trackingId' | 'lat' | 'lng'> & { lat?: number; lng?: number }) => {
     const trackingNum = Math.floor(1000 + Math.random() * 9000);
     const newRep: CitizenReport = {
       ...repData,
+      lat: repData.lat ?? userGpsPosition.lat,
+      lng: repData.lng ?? userGpsPosition.lng,
       id: `rep-${Date.now()}`,
       date: 'Justo ahora',
       status: 'recibido',
@@ -1861,7 +1864,7 @@ function CitizenChatChannel({
   onOpenAlertsConfig
 }: {
   reports: CitizenReport[];
-  onAddReport: (rep: Omit<CitizenReport, 'id' | 'date' | 'status' | 'statusLabel' | 'trackingId'>) => void;
+  onAddReport: (rep: Omit<CitizenReport, 'id' | 'date' | 'status' | 'statusLabel' | 'trackingId' | 'lat' | 'lng'> & { lat?: number; lng?: number }) => void;
   onOpenAlertsConfig?: () => void;
 }) {
   const [selectedCategory, setSelectedCategory] = useState<'bacheo' | 'alumbrado' | 'agua' | 'basura' | 'parques' | 'seguridad'>('bacheo');
